@@ -22,6 +22,7 @@
     "cexio-api-node": "^1.0.4",
     "cliff": "^0.1.10",
     "codemap": "^1.3.1",
+    "coincheck": "github:coincheckjp/coincheck-node#00c7365bc2c94835cdf4590c4f0109afbcc3db63",
     "colors": "^1.1.2",
     "commander": "^2.9.0",
     "ccxt": "^1.4.77",
@@ -53,6 +54,7 @@
     "sosa_mongo": "^1.0.3",
     "talib": "^1.0.3",
     "timebucket": "^0.4.0",
+    "websocket": "^1.0.24",
     "ws": "^3.2.0",
     "zero-fill": "^2.2.3"
   },
