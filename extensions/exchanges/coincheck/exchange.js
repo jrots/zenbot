@@ -103,46 +103,8 @@ module.exports = function container(get, set, clear) {
         return (trade)
       })
       cb(null, trades)
-      /*if (!liveTrading) {
-        var now = new Date().getTime();
-        if ((opts.from < now) && initialTrades != false) {
-          return cb(null, initialTrades);
-        }
-      }
-      
-      var client = publicClient()
-      var params = {
-          options: {
-            success: function(data, response, params) {
-              if (typeof data === 'string') {
-                data = JSON.parse(data);
-              }
-              var trades = data.map(function (trade) {
-                return {
-                  trade_id: trade.id,
-                  time: new Date(trade.created_at).getTime(),
-                  size: Number(trade.amount),
-                  price: Number(trade.rate),
-                  side: trade.order_type
-                }
-              })
-             
-              if (initialTrades == false) {
-                initialTrades = trades
-              }
-              
-              cb(null, trades);
-            },
-            error: function(error, response, params) {
-              cb(error);
-          }
-        }
-      };
-      client.trade.all(params);*/
     },
     getBalance: function(opts, cb) {
-      console.log("GET BALANCE");
-      liveTrading = true;
       var client = authedClient()
       var params = {
           options: {
@@ -187,31 +149,134 @@ module.exports = function container(get, set, clear) {
     },
 
     cancelOrder: function(opts, cb) {
-      console.log('CANCEL')
-      console.log(opts)      
-      cb(null);      
+      var client = authedClient()
+      var params = {
+        data : {
+          id : opts.order_id
+        },
+        options: {
+              success: function(data, response, params) {
+                cb()
+              },
+              error: function(error, response, params) {
+                cb(error);
+              }
+          }
+      };
+      
+      client.order.cancel(params);
     },
 
     trade: function(type, opts, cb) {
-      console.log('TRADE?')
-      console.log(opts)      
-      cb(null);      
+      var client = authedClient()
+    
+      if (typeof opts.order_type === 'undefined' ) {
+        opts.order_type = 'maker'
+      }  
+      var orderData = {
+        pair: 'btc_jpy',
+        order_type: ((opts.order_type === 'taker' ? 'market_' : '') + type),
+        amount: opts.size,
+      }
+      
+      if (opts.order_type === 'taker') {
+        if (type === 'buy') {
+          orderData['market_buy_amount'] = (opts.size * opts.price);
+        } else {
+          orderData['amount'] = opts.size;
+        }
+      } else {
+        orderData['amount'] = opts.size;
+        orderData['rate'] = opts.price;
+      }        
+      
+      var params = {
+        data : orderData,
+        options: {
+              success: function(data, response, params) {
+                  if (typeof data === 'string') {
+                    data = JSON.parse(data);
+                  }
+                  var order = {
+                    id: data && data.id ? data.id : null,
+                    status: 'open',
+                    price: data.rate,
+                    size: data.amount,
+                    created_at: new Date().getTime()
+                  }
+
+                  if (opts.order_type === 'maker') {
+                    order.post_only = !!opts.post_only
+                  }
+
+                    console.log("Data")
+                    console.log(data)
+                    console.log("Order")
+                    console.log(orderData)
+
+                  if (!data.success) {
+                      order.status = 'rejected'
+                      order.reject_reason = 'balance'
+                      return cb(null, order)
+                  }
+
+                  orders['~' + data.id] = order
+                  cb(null, order)
+              },
+              error: function(error, response, params) {
+                  console.log('error', error);
+                  cb(error);
+              }
+          }
+      };
+      client.order.create(params);
     },
 
     buy: function(opts, cb) {
-      console.log('BUYING')
-      console.log(opts)
-      cb();      
+      exchange.trade('buy', opts, cb)
     },
 
     sell: function(opts, cb) {
-      console.log('SELLING')
-      console.log(opts)
-      cb();      
+      exchange.trade('sell', opts, cb)
     },
 
     getOrder: function(opts, cb) {
-      cb();      
+      var client = authedClient()
+      var args = [].slice.call(arguments)
+      var order = orders['~' + opts.order_id]
+      if (!order) return cb(new Error('order not found in cache'))
+        
+      var client = authedClient()
+        
+      var params = {
+        options: {
+              success: function(data, response, params) {
+                  if (typeof data === 'string') {
+                    data = JSON.parse(data);
+                  }
+                  if (data && data.orders.length > 0) {
+                    var done = true;
+                    for (var i=0;i<data.orders.length;i++)
+                    {
+                      if ( data.orders[i]['id'] === order['id'] ) {
+                        done = false;
+                        break;
+                      }
+                    }
+                  }
+                  if (done) {
+                    order.status = 'done';
+                  }
+                  cb(null, order);
+              },
+              error: function(error, response, params) {
+                  console.log('error', error);
+                  cb(error);
+              }
+          }
+      };
+      
+      client.order.opens(params);
     },
 
     // return the property used for range querying.
