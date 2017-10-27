@@ -126,7 +126,8 @@ module.exports = function container(get, set, clear) {
                 return cb(null, balance);
             },
             error: function(error, response, params) {
-              console.log(error);
+                console.log("get balance error:")
+                console.log(error);
               
               return cb(null, lastKnownBalance);
           }
@@ -146,6 +147,7 @@ module.exports = function container(get, set, clear) {
                 cb(null, {bid: data.bid, ask: data.ask})
               },
               error: function(error, response, params) {
+                console.log("get quote error:")
                 console.log(error)
                 cb(new Error('get quote failed'));
               }
@@ -166,6 +168,7 @@ module.exports = function container(get, set, clear) {
                 cb()
               },
               error: function(error, response, params) {
+                console.log("cancel order error:")
                 console.log(error)
                 cb(new Error('order cancelling failed'));
               }
@@ -229,6 +232,7 @@ module.exports = function container(get, set, clear) {
                   cb(null, order)
               },
               error: function(error, response, params) {
+                console.log("trade error:")
                 console.log(error);
                 var order = {
                   id: null,
@@ -285,8 +289,8 @@ module.exports = function container(get, set, clear) {
                   if (typeof data === 'string') {
                     data = JSON.parse(data);
                   }
+                  var done = true;
                   if (data && data.orders.length > 0) {
-                    var done = true;
                     for (var i=0;i<data.orders.length;i++)
                     {
                       if ( data.orders[i]['id'] === order['id'] ) {
@@ -302,7 +306,8 @@ module.exports = function container(get, set, clear) {
                   cb(null, order);
               },
               error: function(error, response, params) {
-                  console.log('error', error);
+                  console.log("not found in cache")
+                  console.log(error)
                   cb(new Error('order not found in cache'));
               }
           }
