@@ -30,7 +30,8 @@ module.exports = function container(get, set, clear) {
       if (!c.coincheck || !c.coincheck.key || c.coincheck.key === 'YOUR-API-KEY') {
         throw new Error('please configure your Coincheck credentials in conf.js')
       }
-      authed_client = new CoinCheck.CoinCheck(c.coincheck.key, c.coincheck.secret);
+      
+      return new CoinCheck.CoinCheck(c.coincheck.key, c.coincheck.secret);
     }
     return authed_client
   }
@@ -82,6 +83,7 @@ module.exports = function container(get, set, clear) {
   tradesClient.connect('ws://ws-api.coincheck.com/');  
 
   var orders = {}
+  var lastKnownBalance = {}
   var startTime = new Date().getTime()
   var initialTrades = false
   var liveTrading = true
@@ -119,13 +121,17 @@ module.exports = function container(get, set, clear) {
                 balance.asset = data[opts.asset.toLowerCase()]
                 balance.currency_hold = data[opts.asset.toLowerCase()+"_reserved"]
                 
-                cb(null, balance);
+                lastKnownBalance = balance
+                
+                return cb(null, balance);
             },
             error: function(error, response, params) {
-              cb(error);
+              console.log(error);
+              
+              return cb(null, lastKnownBalance);
           }
         }
-      };
+      };      
       client.account.balance(params);
     },
 
@@ -140,7 +146,8 @@ module.exports = function container(get, set, clear) {
                 cb(null, {bid: data.bid, ask: data.ask})
               },
               error: function(error, response, params) {
-                cb(error);
+                console.log(error)
+                cb(new Error('get quote failed'));
               }
           }
       };
@@ -159,7 +166,8 @@ module.exports = function container(get, set, clear) {
                 cb()
               },
               error: function(error, response, params) {
-                cb(error);
+                console.log(error)
+                cb(new Error('order cancelling failed'));
               }
           }
       };
@@ -168,15 +176,14 @@ module.exports = function container(get, set, clear) {
     },
 
     trade: function(type, opts, cb) {
-      var client = authedClient()
+      var client = authedClient(true)
     
       if (typeof opts.order_type === 'undefined' ) {
         opts.order_type = 'maker'
       }  
       var orderData = {
         pair: 'btc_jpy',
-        order_type: ((opts.order_type === 'taker' ? 'market_' : '') + type),
-        amount: opts.size,
+        order_type: ((opts.order_type === 'taker' ? 'market_' : '') + type)
       }
       
       if (opts.order_type === 'taker') {
@@ -207,12 +214,10 @@ module.exports = function container(get, set, clear) {
 
                   if (opts.order_type === 'maker') {
                     order.post_only = !!opts.post_only
+                  } else {
+                    order.done_at = new Date().getTime()
+                    order.status = 'done'
                   }
-
-                    console.log("Data")
-                    console.log(data)
-                    console.log("Order")
-                    console.log(orderData)
 
                   if (!data.success) {
                       order.status = 'rejected'
@@ -224,12 +229,35 @@ module.exports = function container(get, set, clear) {
                   cb(null, order)
               },
               error: function(error, response, params) {
-                  console.log('error', error);
-                  cb(error);
+                console.log(error);
+                var order = {
+                  id: null,
+                  status: 'rejected',
+                  reject_reason: 'balance',
+                  price: data.rate,
+                  size: data.amount,
+                  created_at: new Date().getTime()
+                }
+                return cb(null, order)
               }
           }
       };
       client.order.create(params);
+      
+      /* TESTING if you dont want to trade for real. (was to debug issue with getbalance mainly)
+      var order = {
+        id: Date.now(),
+        status: 'done',
+        price: orderData.rate,
+        size: orderData.amount,
+        created_at: new Date().getTime(),
+        done_at: new Date().getTime()
+      }
+      orders['~' + order.id] = order
+      
+      cb(null, order);
+      */
+      
     },
 
     buy: function(opts, cb) {
@@ -247,6 +275,9 @@ module.exports = function container(get, set, clear) {
       if (!order) return cb(new Error('order not found in cache'))
         
       var client = authedClient()
+        if (order['status'] === 'done') {
+          return cb(null, order);
+        }
         
       var params = {
         options: {
@@ -265,13 +296,14 @@ module.exports = function container(get, set, clear) {
                     }
                   }
                   if (done) {
+                    order.done_at = new Date().getTime()
                     order.status = 'done';
                   }
                   cb(null, order);
               },
               error: function(error, response, params) {
                   console.log('error', error);
-                  cb(error);
+                  cb(new Error('order not found in cache'));
               }
           }
       };
