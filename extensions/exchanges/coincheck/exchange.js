@@ -49,13 +49,19 @@ module.exports = function container(get, set, clear) {
   ]
   
   var tradesClient = new WebSocketClient();
+  var initTradeConnection = function() {
+    tradesClient.connect('ws://ws-api.coincheck.com/');
+  };
+  
   tradesClient.on('connect', function(connection) {
       console.log('WebSocket Client Connected');
       connection.on('error', function(error) {
           console.log("Connection Error: " + error.toString());
+          initTradeConnection();
       });
       connection.on('close', function() {
           console.log('echo-protocol Connection Closed');
+          initTradeConnection();
       });
       connection.on('message', function(message) {
           if (message.type === 'utf8') {
@@ -80,7 +86,9 @@ module.exports = function container(get, set, clear) {
       }
       subscribeToTrades();
   });
-  tradesClient.connect('ws://ws-api.coincheck.com/');  
+  initTradeConnection();
+  
+  
 
   var orders = {}
   var lastKnownBalance = {}
